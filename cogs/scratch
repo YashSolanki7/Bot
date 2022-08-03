@@ -1,0 +1,55 @@
+import asyncio
+import json
+
+import aiofiles
+import ctx
+import discord
+from random import randint
+from discord.ext import commands
+
+
+class VerifyCog(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        print(f"{self.__class__.__name__} Cog has been loaded\n-----")
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member):
+        with open('verifychannel.json', 'r', encoding='utf-8') as fp:
+            get_vchannel = json.load(fp)
+
+        try:
+            if get_vchannel:
+                channel = member.guild.get_channel(get_vchannel[str(member.guild.id)]["Channel ID"])
+                roleid = member.guild.get_role(get_vchannel[str(member.guild.id)]["Verify Role"])
+                role = discord.utils.get(member.guild.roles, id=roleid)  # I THINK THIS IS WHERE THE PROBLEM IS
+        except:
+            return
+        try:
+            message = await member.send(
+                f"Thanks for joining **{member.guild.name}**! The server has requested verification for new members. **Please react to this message with ✅ to verify!** You have one hour to verify!")
+            await message.add_reaction("✅")
+            await channel.send(
+                f"Welcome {member.mention}! Please check your dm's as I have sent you a message to verify yourself!")
+
+            def check(reaction, user):
+                return user == member and str(reaction.emoji) == '✅'
+
+            try:
+                reaction, user = await self.client.wait_for('reaction_add', timeout=3600, check=check)
+            except asyncio.TimeoutError:
+                await member.send("You didn't verify in time! You have been kicked from the server.")
+                await member.kick(reason="Didn't verify in 1 hour, possible bot/alt account | Guard")
+            else:
+                await member.send(f'You have been verified! Enjoy your stay in **{member.guild.name}**!')
+                await member.add_role(role=role)
+        except:
+            await channel.send(
+                f"{member.mention} You could not be verified because your dm's are not open. Please allow server members to DM you then rejoin the server.")
+
+
+def setup(bot):
+    bot.add_cog(VerifyCog(bot))
